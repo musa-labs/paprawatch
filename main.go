@@ -19,6 +19,7 @@ func main() {
 				Name:     "dir",
 				Aliases:  []string{"d"},
 				Usage:    "Directory to watch for new files",
+				Sources:  cli.EnvVars("PAPRA_WATCH_DIR"),
 				Required: true,
 			},
 			&cli.StringFlag{
@@ -26,11 +27,13 @@ func main() {
 				Aliases: []string{"u"},
 				Usage:   "Papra instance URL",
 				Value:   "https://api.papra.app",
+				Sources: cli.EnvVars("PAPRA_API_URL"),
 			},
 			&cli.StringFlag{
 				Name:     "org",
 				Aliases:  []string{"o"},
 				Usage:    "Papra Organization ID",
+				Sources:  cli.EnvVars("PAPRA_ORG_ID"),
 				Required: true,
 			},
 			&cli.StringFlag{
@@ -43,6 +46,7 @@ func main() {
 			&cli.StringFlag{
 				Name:    "ocr",
 				Usage:   "OCR Languages (optional, e.g. 'eng,fra')",
+				Sources: cli.EnvVars("PAPRA_OCR_LANGUAGES"),
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {

@@ -6,7 +6,7 @@
 
 - **Real-time Monitoring**: Uses `fsnotify` to detect new files as soon as they are created.
 - **Automated Uploads**: Automatically constructs `multipart/form-data` requests to the Papra API.
-- **Secure Authentication**: Supports API tokens via CLI flags or the `PAPRA_API_TOKEN` environment variable.
+- **Secure Authentication**: Supports API tokens via CLI flags or environment variables.
 - **Modern CLI**: Built with `urfave/cli/v3`.
 
 ## Prerequisites
@@ -37,21 +37,24 @@ You can start watching a directory by providing the directory path, organization
 
 ### Using Environment Variables
 
-For better security, you can export your API token as an environment variable:
+You can configure `paprawatch` using environment variables for a cleaner command or better security:
 
 ```bash
 export PAPRA_API_TOKEN="your-api-token"
-./paprawatch -d ./uploads -o "your-org-id"
+export PAPRA_ORG_ID="your-org-id"
+export PAPRA_WATCH_DIR="./uploads"
+./paprawatch
 ```
 
 ### Options
 
 | Flag | Alias | Environment Variable | Description | Default |
 |------|-------|----------------------|-------------|---------|
-| `--dir` | `-d` | - | **Required.** Directory to watch for new files. | - |
-| `--org` | `-o` | - | **Required.** Papra Organization ID. | - |
+| `--dir` | `-d` | `PAPRA_WATCH_DIR` | **Required.** Directory to watch for new files. | - |
+| `--org` | `-o` | `PAPRA_ORG_ID` | **Required.** Papra Organization ID. | - |
 | `--token` | `-t` | `PAPRA_API_TOKEN` | **Required.** Papra API Token. | - |
-| `--url` | `-u` | - | Papra instance URL. | `https://api.papra.app` |
+| `--url` | `-u` | `PAPRA_API_URL` | Papra instance URL. | `https://api.papra.app` |
+| `--ocr` | - | `PAPRA_OCR_LANGUAGES` | OCR Languages (optional, e.g. 'eng,fra'). | - |
 
 ## How It Works
 

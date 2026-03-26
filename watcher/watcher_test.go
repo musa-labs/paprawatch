@@ -16,7 +16,7 @@ func TestWatcher(t *testing.T) {
 		fileDetected <- filePath
 	}
 
-	w := NewWatcher(tmpDir, onFile)
+	w := NewWatcher([]string{tmpDir}, onFile)
 
 	go func() {
 		err := w.Start()

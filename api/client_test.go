@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestUploadDocument(t *testing.T) {
@@ -100,11 +101,39 @@ func TestUploadDocument_Failure(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient(server.URL, "org123", "test-token")
+	client.MaxRetries = 2
+	client.InitialBackoff = 1 * time.Millisecond
 	err := client.UploadDocument(filePath, "")
 	if err == nil {
 		t.Error("Expected an error for non-2xx response")
 	}
 	if !strings.Contains(err.Error(), "status 500") {
 		t.Errorf("Expected error to contain 'status 500', got: %v", err)
+	}
+}
+
+func TestUploadDocument_AlreadyExists(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.txt")
+	os.WriteFile(filePath, []byte("test"), 0644)
+
+	uploadCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uploadCount++
+		w.WriteHeader(http.StatusConflict)
+		fmt.Fprintln(w, `{"error":{"message":"Document already exists."}}`)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "org123", "test-token")
+	client.MaxRetries = 5
+	err := client.UploadDocument(filePath, "")
+
+	if err != ErrDocumentAlreadyExists {
+		t.Errorf("Expected ErrDocumentAlreadyExists, got: %v", err)
+	}
+
+	if uploadCount != 1 {
+		t.Errorf("Expected exactly 1 upload attempt for 409 Conflict, got %d", uploadCount)
 	}
 }

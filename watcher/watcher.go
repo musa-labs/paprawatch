@@ -9,13 +9,13 @@ import (
 )
 
 type Watcher struct {
-	Dir    string
+	Dirs   []string
 	OnFile func(filePath string)
 }
 
-func NewWatcher(dir string, onFile func(filePath string)) *Watcher {
+func NewWatcher(dirs []string, onFile func(filePath string)) *Watcher {
 	return &Watcher{
-		Dir:    dir,
+		Dirs:   dirs,
 		OnFile: onFile,
 	}
 }
@@ -51,17 +51,20 @@ func (w *Watcher) Start() error {
 		}
 	}()
 
-	absDir, err := filepath.Abs(w.Dir)
-	if err != nil {
-		return err
+	for _, dir := range w.Dirs {
+		absDir, err := filepath.Abs(dir)
+		if err != nil {
+			return err
+		}
+
+		err = watcher.Add(absDir)
+		if err != nil {
+			log.Printf("Failed to watch directory %s: %v", absDir, err)
+			return err
+		}
+		log.Printf("Watching directory: %s", absDir)
 	}
 
-	err = watcher.Add(absDir)
-	if err != nil {
-		return err
-	}
-
-	log.Printf("Watching directory: %s", absDir)
 	<-done
 
 	return nil

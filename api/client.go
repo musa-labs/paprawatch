@@ -3,30 +3,65 @@ package api
 import (
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"time"
 )
 
+var ErrDocumentAlreadyExists = fmt.Errorf("document already exists")
+
 type Client struct {
-	URL   string
-	OrgID string
-	Token string
-	HTTP  *http.Client
+	URL            string
+	OrgID          string
+	Token          string
+	HTTP           *http.Client
+	MaxRetries     int
+	InitialBackoff time.Duration
 }
 
 func NewClient(url, orgID, token string) *Client {
 	return &Client{
-		URL:   url,
-		OrgID: orgID,
-		Token: token,
-		HTTP:  &http.Client{},
+		URL:            url,
+		OrgID:          orgID,
+		Token:          token,
+		HTTP:           &http.Client{},
+		MaxRetries:     5,
+		InitialBackoff: 1 * time.Second,
 	}
 }
 
 func (c *Client) UploadDocument(filePath string, ocrLanguages string) error {
+	var lastErr error
+	backoff := c.InitialBackoff
+
+	for i := 0; i < c.MaxRetries; i++ {
+		if i > 0 {
+			log.Printf("Retrying upload of %s (attempt %d/%d) in %v...", filePath, i+1, c.MaxRetries, backoff)
+			time.Sleep(backoff)
+			backoff *= 2
+		}
+
+		err := c.upload(filePath, ocrLanguages)
+		if err == nil {
+			return nil
+		}
+
+		// Don't retry if the document already exists on the server
+		if err == ErrDocumentAlreadyExists {
+			return err
+		}
+
+		lastErr = err
+	}
+
+	return fmt.Errorf("failed to upload %s after %d attempts: %w", filePath, c.MaxRetries, lastErr)
+}
+
+func (c *Client) upload(filePath string, ocrLanguages string) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("could not open file %s: %w", filePath, err)
@@ -89,6 +124,10 @@ func (c *Client) UploadDocument(filePath string, ocrLanguages string) error {
 		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusConflict {
+		return ErrDocumentAlreadyExists
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(resp.Body)

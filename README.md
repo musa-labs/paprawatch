@@ -1,13 +1,15 @@
 # paprawatch
 
-`paprawatch` is a Go-based CLI tool that monitors a local directory for new files and automatically uploads them to a [Papra](https://papra.app) organization via the official REST API.
+`paprawatch` is a Go-based CLI tool that monitors local directories for new PDF files and automatically uploads them to a [Papra](https://papra.app) organization via the official REST API.
 
 ## Features
 
 - **Real-time Monitoring**: Uses `fsnotify` to detect new files as soon as they are created.
-- **Automated Uploads**: Automatically constructs `multipart/form-data` requests to the Papra API.
-- **Secure Authentication**: Supports API tokens via CLI flags or environment variables.
-- **Modern CLI**: Built with `urfave/cli/v3`.
+- **Bulk Scanning**: A dedicated `scan` command to traverse your directories and upload existing PDFs.
+- **Smart Tracking**: Uses a local SQLite database (`~/.paprawatch/paprawatch.db`) to ensure files are only uploaded once, even if they are moved or the tool is restarted.
+- **Robust Uploads**: Built-in exponential backoff and retry logic for reliable uploads under heavy load.
+- **Persistent Config**: Interactive setup that saves your credentials and preferences to `~/.config/paprawatch/config.yaml`.
+- **Modern CLI**: Built with `urfave/cli/v3` and `charmbracelet/huh`.
 
 ## Prerequisites
 
@@ -25,44 +27,58 @@ cd paprawatch
 go build -o paprawatch
 ```
 
-## Usage
+## Getting Started
 
-You can start watching a directory by providing the directory path, organization ID, and your API token.
-
-### Using CLI Flags
+The easiest way to get started is by running the interactive setup:
 
 ```bash
-./paprawatch --dir ./uploads --org "your-org-id" --token "your-api-token"
+./paprawatch setup
 ```
 
-### Using Environment Variables
+This will walk you through configuring your Organization ID, API Token, and the directories you want to watch.
 
-You can configure `paprawatch` using environment variables for a cleaner command or better security:
+## Usage
+
+### 1. Watch Mode (Default)
+
+Start the real-time watcher. It will monitor your configured directories and upload any new PDFs.
 
 ```bash
-export PAPRA_API_TOKEN="your-api-token"
-export PAPRA_ORG_ID="your-org-id"
-export PAPRA_WATCH_DIR="./uploads"
 ./paprawatch
 ```
 
-### Options
+### 2. Scan Mode
+
+Scan your configured directories for existing PDFs and upload them. It uses file hashing to skip anything already seen by `paprawatch`.
+
+```bash
+./paprawatch scan
+```
+
+You can also override the directories to scan via the CLI:
+
+```bash
+./paprawatch scan --dir ~/Documents --dir ~/Downloads
+```
+
+### Options & Flags
 
 | Flag | Alias | Environment Variable | Description | Default |
 |------|-------|----------------------|-------------|---------|
-| `--dir` | `-d` | `PAPRA_WATCH_DIR` | **Required.** Directory to watch for new files. | - |
-| `--org` | `-o` | `PAPRA_ORG_ID` | **Required.** Papra Organization ID. | - |
-| `--token` | `-t` | `PAPRA_API_TOKEN` | **Required.** Papra API Token. | - |
+| `--dir` | `-d` | `PAPRA_WATCH_DIR` | Directories to watch or scan (can be specified multiple times). | `.` |
+| `--org` | `-o` | `PAPRA_ORG_ID` | Papra Organization ID. | - |
+| `--token` | `-t` | `PAPRA_API_TOKEN` | Papra API Token. | - |
 | `--url` | `-u` | `PAPRA_API_URL` | Papra instance URL. | `https://api.papra.app` |
 | `--ocr` | - | `PAPRA_OCR_LANGUAGES` | OCR Languages (optional, e.g. 'eng,fra'). | - |
 
 ## How It Works
 
-1. **Initialization**: The tool parses your configuration and initializes an API client and a file system watcher.
-2. **Watching**: It uses the `fsnotify` library to hook into operating system events. It specifically listens for `Create` events in the target directory.
-3. **Trigger**: When a new file is detected, its path is passed to the upload handler.
-4. **Upload**: The tool opens the file, wraps it in a multipart form, adds the `Authorization: Bearer <token>` header, and sends a `POST` request to `/api/organizations/:orgId/documents`.
-5. **Logging**: Success or failure of each upload is logged directly to the terminal.
+1. **Configuration**: Credentials and watch directories are stored in your home directory. CLI flags and environment variables take precedence over saved config.
+2. **Deduplication**: Every PDF found is hashed (SHA-256). The hash is checked against a local SQLite database. If the hash exists, the file is skipped.
+3. **Resilience**:
+    - If an upload fails due to a network error or server load, the tool uses **exponential backoff** to retry up to 5 times.
+    - If the server reports the document already exists (409 Conflict), the tool records this in the local database and continues.
+4. **Streaming**: Files are streamed to the API using `io.Pipe` to keep memory usage low even with large PDF collections.
 
 ## Development
 
@@ -76,6 +92,9 @@ go test ./...
 
 ### Project Structure
 
-- `main.go`: Entry point and CLI flag definitions.
-- `api/client.go`: Handles HTTP communication with Papra.
-- `watcher/watcher.go`: Manages the `fsnotify` lifecycle.
+- `main.go`: CLI entry point and command routing.
+- `api/`: Papra REST API client with retry logic.
+- `config/`: Configuration management and interactive setup.
+- `db/`: SQLite persistence for file tracking.
+- `scanner/`: Recursive directory walking and hashing.
+- `watcher/`: Real-time file system events.
